@@ -6,7 +6,7 @@ on:
   workflow_dispatch:          # adds a manual "Run workflow" button in the Actions tab
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -30,6 +30,25 @@ jobs:
         run: node scripts/generate-ics.js
         env:
           FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+
+      - name: Update Discord embed
+        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
+        run: node scripts/update-discord-embed.js
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+
+      - name: Save Discord message ID (if it changed)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -f state/discord-message.json ] && ! git diff --quiet -- state/discord-message.json; then
+            git add state/discord-message.json
+            git commit -m "Update saved Discord message ID"
+            git push
+          else
+            echo "No change to commit."
+          fi
 
       - uses: actions/upload-pages-artifact@v3
         with:
