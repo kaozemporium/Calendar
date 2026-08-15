@@ -43,12 +43,16 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -f state/discord-message.json ] && ! git diff --quiet -- state/discord-message.json; then
+          if [ -f state/discord-message.json ]; then
             git add state/discord-message.json
-            git commit -m "Update saved Discord message ID"
-            git push
+            if ! git diff --cached --quiet; then
+              git commit -m "Update saved Discord message ID"
+              git push
+            else
+              echo "No change to commit."
+            fi
           else
-            echo "No change to commit."
+            echo "No state file to commit."
           fi
 
       - uses: actions/upload-pages-artifact@v3
