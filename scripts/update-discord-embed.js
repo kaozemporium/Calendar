@@ -47,6 +47,37 @@ function niceTime(timeStr){
   return `${h12}:${String(m).padStart(2, "0")} ${period}`;
 }
 
+// Renders a small ASCII month calendar for a monospace code block — the
+// closest thing to "looks like a calendar" that a Discord embed can do
+// (there's no real grid/table UI component available here). Days with an
+// event get a trailing marker; it can't show event titles in the grid
+// itself (no room), which is what the event list below it is for.
+function buildMonthGrid(year, month, eventDatesInMonth){
+  const monthName = new Date(year, month, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const lines = [];
+  lines.push(monthName.toUpperCase());
+  lines.push("Su Mo Tu We Th Fr Sa");
+
+  let row = "";
+  for(let i = 0; i < firstDow; i++) row += "   ";
+  for(let day = 1; day <= daysInMonth; day++){
+    const dStr = `${year}-${pad(month + 1)}-${pad(day)}`;
+    const hasEvent = eventDatesInMonth.has(dStr);
+    row += `${String(day).padStart(2)}${hasEvent ? "*" : " "}`;
+    const dow = (firstDow + day - 1) % 7;
+    if(dow === 6 || day === daysInMonth){
+      lines.push(row.trimEnd());
+      row = "";
+    }
+  }
+  lines.push("");
+  lines.push("* = event that day — see list below for details");
+  return lines.join("\n");
+}
+
 // Mirrors the client-side / .ics-generator recurrence expansion — walks a
 // repeating event forward and returns every occurrence date within range.
 function occurrenceDates(e, rangeStart, rangeEnd){
@@ -137,18 +168,31 @@ async function main(){
     }
   }));
 
+  const now = new Date();
+  const eventDatesInMonth = new Set(
+    upcoming
+      .filter((e) => {
+        const d = new Date(e.date + "T00:00:00");
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      })
+      .map((e) => e.date)
+  );
+  const monthGrid = buildMonthGrid(now.getFullYear(), now.getMonth(), eventDatesInMonth);
+
   upcoming.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
   upcoming = upcoming.slice(0, MAX_EVENTS_SHOWN);
 
-  const description = upcoming.length === 0
+  const eventListText = upcoming.length === 0
     ? "Nothing on the calendar in the next 60 days."
     : upcoming.map((e) => {
         const t = niceTime(e.time);
         return `**${niceDate(e.date)}**${t ? ` · ${t}` : ""} — ${e.title}`;
       }).join("\n");
 
+  const description = "```\n" + monthGrid + "\n```\n\n**Upcoming Events**\n" + eventListText;
+
   const embed = {
-    title: "📅 Upcoming Events",
+    title: "📅 Calendar",
     description,
     color: EMBED_COLOR,
     timestamp: new Date().toISOString(),
